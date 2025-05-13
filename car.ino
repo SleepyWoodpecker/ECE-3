@@ -4,7 +4,7 @@ const int LED_RF = 41;
 
 #define NUM_SENSORS 8
 #define KP 0.005
-#define ERROR_TERM_TOLERANCE 250
+#define ERROR_TERM_TOLERANCE 200
 
 #define LEFT_NSLP_PIN 31 // nslp ==> awake & ready for PWM
 #define LEFT_DIR_PIN 29
@@ -14,7 +14,9 @@ const int LED_RF = 41;
 #define RIGHT_PWM_PIN 39
 
 #define MAX_ERROR 15000
-#define BASE_SPEED 30
+#define BASE_SPEED 50
+#define REVERSE_SPEED 20
+#define REVERSE_COUNTER_TRIGGER 10
 
 // #define IS_DEBUG 
 
@@ -23,6 +25,9 @@ uint16_t minTerms[] = {805, 728, 711, 688, 640, 758, 734, 805};
 uint16_t maxDiff[] = {1695, 1772, 1789, 1254, 1515, 1742, 1766, 1695};
 float normalizedValues[NUM_SENSORS];
 float resultValues[NUM_SENSORS];
+
+uint8_t rightReverseCounter = 0;
+uint8_t leftReverseCounter = 0;
 
 struct WheelSpeed {
   int rightSpeed;
@@ -57,8 +62,8 @@ void setup() {
   delay(20); //Wait 2 seconds before starting 
   // Serial.println("BEGIN");
   
-  updateLeftWheelSpeed(30);
-  updateRightWheelSpeed(30);
+  updateLeftWheelSpeed(50);
+  updateRightWheelSpeed(50);
 }
 
 void loop() {
@@ -128,11 +133,15 @@ void updateLeftWheelSpeed(float errorTerm) {
   if (errorTerm < 0) { // if on left side
     digitalWrite(LEFT_DIR_PIN, LOW); // turn left wheel backwards
   } else {
-    digitalWrite(LEFT_DIR_PIN, HIGH);
+    leftReverseCounter += 1;
+
+    if (leftReverseCounter >= REVERSE_COUNTER_TRIGGER) {
+      digitalWrite(LEFT_DIR_PIN, HIGH);
+      wheel_speed.leftSpeed = REVERSE_SPEED;
+    }
   }
 
-  analogWrite(LEFT_PWN_PIN, abs(wheel_speed.leftSpeed));
-  // analogWrite(LEFT_PWN_PIN, 30);
+  analogWrite(LEFT_PWN_PIN, wheel_speed.leftSpeed);
 }
 
 void updateRightWheelSpeed(float errorTerm) {
@@ -154,11 +163,17 @@ void updateRightWheelSpeed(float errorTerm) {
   #endif
 
   if (errorTerm > 0) { // if on right side
+    rightReverseCounter = 0;
     digitalWrite(RIGHT_DIR_PIN, LOW);
-  } else {
-    digitalWrite(RIGHT_DIR_PIN, HIGH);
+  } 
+  else {
+    rightReverseCounter += 1;
+
+    if (rightReverseCounter >= REVERSE_COUNTER_TRIGGER) {
+      digitalWrite(RIGHT_DIR_PIN, HIGH);
+      wheel_speed.rightSpeed = REVERSE_SPEED;
+    }
   }
 
-  analogWrite(RIGHT_PWM_PIN, (abs(wheel_speed.rightSpeed)));
-  // analogWrite(RIGHT_PWM_PIN, 30);
+  analogWrite(RIGHT_PWM_PIN, wheel_speed.rightSpeed);
 }
