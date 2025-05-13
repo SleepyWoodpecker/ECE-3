@@ -17,8 +17,9 @@ const int LED_RF = 41;
 #define BASE_SPEED 50
 #define REVERSE_SPEED 20
 #define REVERSE_COUNTER_TRIGGER 10
+#define SPLIT_TRESHOLD 8200
 
-// #define IS_DEBUG 
+#define IS_DEBUG 
 
 uint16_t sensorValues[8];
 uint16_t minTerms[] = {805, 728, 711, 688, 640, 758, 734, 805};
@@ -44,14 +45,14 @@ void setup() {
   pinMode(LEFT_PWN_PIN,OUTPUT);
 
   digitalWrite(LEFT_DIR_PIN,LOW);
-  digitalWrite(LEFT_NSLP_PIN,HIGH);
+  // digitalWrite(LEFT_NSLP_PIN,HIGH);
 
   pinMode(RIGHT_NSLP_PIN, OUTPUT);
   pinMode(RIGHT_DIR_PIN, OUTPUT);
   pinMode(RIGHT_PWM_PIN, OUTPUT);
   
   digitalWrite(RIGHT_DIR_PIN, LOW);
-  digitalWrite(RIGHT_NSLP_PIN, HIGH);
+  // digitalWrite(RIGHT_NSLP_PIN, HIGH);
 
   pinMode(LED_RF, OUTPUT);
   
@@ -71,7 +72,17 @@ void loop() {
 
   ECE3_read_IR(sensorValues);
 
-  getNormalizedValues(normalizedValues);
+  float sensorTotal = getNormalizedValues(normalizedValues);
+  #ifdef IS_DEBUG
+  Serial.println(sensorTotal);
+  #endif
+
+  if (sensorTotal >= SPLIT_TRESHOLD) {
+    #ifdef IS_DEBUG
+    Serial.println("THIS IS THE SPLIT");
+    #endif
+  }
+
   float errorTerm = calculate1514128Error(normalizedValues);
 
   #ifdef IS_DEBUG
@@ -86,10 +97,15 @@ void loop() {
   #endif
 }
 
-void getNormalizedValues(float results[]) {
+float getNormalizedValues(float results[]) {
+  float sum = 0;
   for (int i =0; i < NUM_SENSORS; ++i) {
     results[i] = (sensorValues[i] - minTerms[i]) * 1000 / maxDiff[i];
+    sum += sensorValues[i];
+    Serial.println(sum);
   }
+
+  return sum;
 }
 
 // when it veers off to the right, the error is negative
