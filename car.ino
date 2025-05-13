@@ -3,8 +3,8 @@
 const int LED_RF = 41;
 
 #define NUM_SENSORS 8
-#define KP 0.1
-#define DEVIATION_FROM_CENTER_MARGIN 200
+#define KP 0.005
+#define ERROR_TERM_TOLERANCE 250
 
 #define LEFT_NSLP_PIN 31 // nslp ==> awake & ready for PWM
 #define LEFT_DIR_PIN 29
@@ -12,6 +12,11 @@ const int LED_RF = 41;
 #define RIGHT_NSLP_PIN 11
 #define RIGHT_DIR_PIN 30
 #define RIGHT_PWM_PIN 39
+
+#define MAX_ERROR 15000
+#define BASE_SPEED 30
+
+// #define IS_DEBUG 
 
 uint16_t sensorValues[8];
 uint16_t minTerms[] = {805, 728, 711, 688, 640, 758, 734, 805};
@@ -23,7 +28,7 @@ struct WheelSpeed {
   int rightSpeed;
   int leftSpeed;
 } wheel_speed = {
-  20, 20
+  30, 30
 };
 
 ///////////////////////////////////
@@ -49,29 +54,31 @@ void setup() {
 
   // set the data rate in bits/second for serial data transmission
   Serial.begin(9600); 
-  delay(2000); //Wait 2 seconds before starting 
-  Serial.println("BEGIN");
+  delay(20); //Wait 2 seconds before starting 
+  // Serial.println("BEGIN");
   
-  updateLeftWheelSpeed(0);
-  updateRightWheelSpeed(0);
+  updateLeftWheelSpeed(30);
+  updateRightWheelSpeed(30);
 }
 
 void loop() {
   // while (!Serial.available()) {}
-
-  Serial.println("HI");
 
   ECE3_read_IR(sensorValues);
 
   getNormalizedValues(normalizedValues);
   float errorTerm = calculate1514128Error(normalizedValues);
 
+  #ifdef IS_DEBUG
   Serial.println(errorTerm);
+  #endif
 
   updateRightWheelSpeed(errorTerm);
   updateLeftWheelSpeed(errorTerm);
 
-  delay(5000);
+  #ifdef IS_DEBUG
+  delay(1000);
+  #endif
 }
 
 void getNormalizedValues(float results[]) {
@@ -98,33 +105,60 @@ float calculate1514128Error(float normalized_values[]) {
 // when veering off to the left, this becomes positive
 // when veering off to the right, this becomes negative
 void updateLeftWheelSpeed(float errorTerm) {
-  wheel_speed.leftSpeed -= KP * errorTerm;
+  
+  // based on experimentation, the tolerable error term is about 200
+  if (abs(errorTerm) <= ERROR_TERM_TOLERANCE) {
+    digitalWrite(RIGHT_DIR_PIN, LOW);
 
-  Serial.print("The left wheel speed is ");
-  Serial.println(wheel_speed.leftSpeed);
+    #ifdef IS_DEBUG
+    Serial.println("Exiting because margin not high enough");
+    #endif
 
-  if (wheel_speed.leftSpeed < 0) {
-    digitalWrite(LEFT_DIR_PIN, HIGH);
-  } else {
-    digitalWrite(LEFT_DIR_PIN, LOW);
+    return;
   }
 
-  // analogWrite(LEFT_PWN_PIN, abs(wheel_speed.leftSpeed));
-  analogWrite(LEFT_PWN_PIN, 20);
+  wheel_speed.leftSpeed = BASE_SPEED + KP * errorTerm;
+
+  #ifdef IS_DEBUG
+  Serial.print("The left wheel speed is ");
+  Serial.println(wheel_speed.leftSpeed);
+  #endif
+
+
+  if (errorTerm < 0) { // if on left side
+    digitalWrite(LEFT_DIR_PIN, LOW); // turn left wheel backwards
+  } else {
+    digitalWrite(LEFT_DIR_PIN, HIGH);
+  }
+
+  analogWrite(LEFT_PWN_PIN, abs(wheel_speed.leftSpeed));
+  // analogWrite(LEFT_PWN_PIN, 30);
 }
 
 void updateRightWheelSpeed(float errorTerm) {
-  wheel_speed.rightSpeed += KP * errorTerm;
-
-  Serial.print("The right wheel speed is ");
-  Serial.println(wheel_speed.rightSpeed);
-
-  if (wheel_speed.rightSpeed < 0) {
-    digitalWrite(RIGHT_DIR_PIN, HIGH);
-  } else {
+  if (abs(errorTerm) <= ERROR_TERM_TOLERANCE) {
     digitalWrite(RIGHT_DIR_PIN, LOW);
+
+    #ifdef IS_DEBUG
+    Serial.println("Exiting because margin not high enough");
+    #endif
+
+    return;
   }
 
-  // analogWrite(RIGHT_PWM_PIN, (abs(wheel_speed.rightSpeed)));
-  analogWrite(RIGHT_PWM_PIN, 20);
+  wheel_speed.rightSpeed = BASE_SPEED + KP * errorTerm;
+
+  #ifdef IS_DEBUG
+  Serial.print("The right wheel speed is ");
+  Serial.println(wheel_speed.rightSpeed);
+  #endif
+
+  if (errorTerm > 0) { // if on right side
+    digitalWrite(RIGHT_DIR_PIN, LOW);
+  } else {
+    digitalWrite(RIGHT_DIR_PIN, HIGH);
+  }
+
+  analogWrite(RIGHT_PWM_PIN, (abs(wheel_speed.rightSpeed)));
+  // analogWrite(RIGHT_PWM_PIN, 30);
 }
