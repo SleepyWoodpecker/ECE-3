@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Template",
+            "includePath": [
+                "/Users/shawnwei/Library/Arduino15/packages/esp32/hardware/esp32/3.2.0/cores/esp32/",
+                "${HOME}/Documents/Arduino/hardware/espressif/esp32/tools/esp32-arduino-libs/**",
+                "${workspaceFolder}/**",
+                "${HOME}/Documents/Arduino/libraries/**",
+                "${HOME}/Documents/Arduino/hardware/espressif/esp32/**",
+                "${HOME}/Library/Arduino15/packages**",
+                "${HOME}/Documents/Arduino/libraries/Adafruit_ADS1X15",
+                "${HOME}/Documents/Arduino/hardware/espressif/esp32/tools/riscv32-esp-elf/riscv32-esp-elf/include/c++/13.2.0",
+                "${HOME}/Documents/Arduino/hardware/espressif/esp32/tools/esp32-arduino-libs/esp32/include/newlib/platform_include",
+                "/Users/shawnwei/Documents/Arduino/hardware/espressif/esp32/libraries/FS/src"
+            ],
+            "defines": [
+                "INTELLISENSE"
+            ]
+        }
+    ],
+    "version": 4
+}

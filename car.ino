@@ -6,6 +6,11 @@ const int LED_RF = 41;
 #define KP 0.005
 #define ERROR_TERM_TOLERANCE 200
 
+#define TURN_COUNTS 3
+#define TURN_TIMEOUT_MILLIS 300
+#define BLACK_LINE_TRESHOLD 1600
+#define SPLIT_BLACK_LINE_COUNT 3
+
 #define LEFT_NSLP_PIN 31 // nslp ==> awake & ready for PWM
 #define LEFT_DIR_PIN 29
 #define LEFT_PWN_PIN 40
@@ -14,12 +19,11 @@ const int LED_RF = 41;
 #define RIGHT_PWM_PIN 39
 
 #define MAX_ERROR 15000
-#define BASE_SPEED 50
+#define BASE_SPEED 30
 #define REVERSE_SPEED 20
 #define REVERSE_COUNTER_TRIGGER 10
-#define SPLIT_TRESHOLD 8200
 
-#define IS_DEBUG 
+// #define IS_DEBUG 
 
 uint16_t sensorValues[8];
 uint16_t minTerms[] = {805, 728, 711, 688, 640, 758, 734, 805};
@@ -45,14 +49,20 @@ void setup() {
   pinMode(LEFT_PWN_PIN,OUTPUT);
 
   digitalWrite(LEFT_DIR_PIN,LOW);
-  // digitalWrite(LEFT_NSLP_PIN,HIGH);
+
+  // #ifndef IS_DEBUG
+  digitalWrite(LEFT_NSLP_PIN,HIGH);
+  // #endif
 
   pinMode(RIGHT_NSLP_PIN, OUTPUT);
   pinMode(RIGHT_DIR_PIN, OUTPUT);
   pinMode(RIGHT_PWM_PIN, OUTPUT);
   
   digitalWrite(RIGHT_DIR_PIN, LOW);
-  // digitalWrite(RIGHT_NSLP_PIN, HIGH);
+
+  // #ifndef IS_DEBUG
+  digitalWrite(RIGHT_NSLP_PIN, HIGH);
+  // #endif
 
   pinMode(LED_RF, OUTPUT);
   
@@ -63,8 +73,8 @@ void setup() {
   delay(20); //Wait 2 seconds before starting 
   // Serial.println("BEGIN");
   
-  updateLeftWheelSpeed(50);
-  updateRightWheelSpeed(50);
+  updateLeftWheelSpeed(30);
+  updateRightWheelSpeed(30);
 }
 
 void loop() {
@@ -77,10 +87,13 @@ void loop() {
   Serial.println(sensorTotal);
   #endif
 
-  if (sensorTotal >= SPLIT_TRESHOLD) {
+  // go left when heading out on the split, go right when heading back on the split
+  if (isSplit()) {
     #ifdef IS_DEBUG
     Serial.println("THIS IS THE SPLIT");
     #endif
+
+    turnLeft();
   }
 
   float errorTerm = calculate1514128Error(normalizedValues);
@@ -93,7 +106,7 @@ void loop() {
   updateLeftWheelSpeed(errorTerm);
 
   #ifdef IS_DEBUG
-  delay(1000);
+  // delay(1000);
   #endif
 }
 
@@ -102,7 +115,10 @@ float getNormalizedValues(float results[]) {
   for (int i =0; i < NUM_SENSORS; ++i) {
     results[i] = (sensorValues[i] - minTerms[i]) * 1000 / maxDiff[i];
     sum += sensorValues[i];
+
+    #ifdef IS_DEBUG
     Serial.println(sum);
+    #endif
   }
 
   return sum;
@@ -140,12 +156,6 @@ void updateLeftWheelSpeed(float errorTerm) {
 
   wheel_speed.leftSpeed = BASE_SPEED + KP * errorTerm;
 
-  #ifdef IS_DEBUG
-  Serial.print("The left wheel speed is ");
-  Serial.println(wheel_speed.leftSpeed);
-  #endif
-
-
   if (errorTerm < 0) { // if on left side
     digitalWrite(LEFT_DIR_PIN, LOW); // turn left wheel backwards
   } else {
@@ -173,11 +183,6 @@ void updateRightWheelSpeed(float errorTerm) {
 
   wheel_speed.rightSpeed = BASE_SPEED + KP * errorTerm;
 
-  #ifdef IS_DEBUG
-  Serial.print("The right wheel speed is ");
-  Serial.println(wheel_speed.rightSpeed);
-  #endif
-
   if (errorTerm > 0) { // if on right side
     rightReverseCounter = 0;
     digitalWrite(RIGHT_DIR_PIN, LOW);
@@ -192,4 +197,52 @@ void updateRightWheelSpeed(float errorTerm) {
   }
 
   analogWrite(RIGHT_PWM_PIN, wheel_speed.rightSpeed);
+}
+
+bool isSplit() {
+  // detect split by checking how many sensors indicate that there is a black line
+  #ifdef IS_DEBUG
+  Serial.println("SENSOR VALUES");
+  for (int i = 0; i < NUM_SENSORS; ++i) {
+    Serial.println((float)sensorValues[i]);
+  }
+  Serial.println("SENSOR VALUES END");
+  #endif
+
+  uint8_t blackLineCount = 0;
+  for (int i = 0; i < NUM_SENSORS; ++i) {
+    if ((float)sensorValues[i] > BLACK_LINE_TRESHOLD) {
+      ++blackLineCount;
+    }
+  }
+
+  return blackLineCount >= SPLIT_BLACK_LINE_COUNT;
+}
+
+void turnLeft() {
+  #ifdef IS_DEBUG
+  Serial.println("Making manual left turn");
+  #endif
+
+  delay(1000);
+
+  // get the intial state of the pins
+  uint8_t originalLeftPinDir = digitalRead(LEFT_DIR_PIN);
+  uint8_t originalRightPinDir = digitalRead(RIGHT_DIR_PIN);
+  
+  // turn left
+  digitalWrite(LEFT_DIR_PIN, HIGH);
+  digitalWrite(RIGHT_DIR_PIN, LOW);
+
+  unsigned long start_time = millis();
+
+  // turn left for 0.5 seconds
+  while (millis() - start_time < TURN_TIMEOUT_MILLIS) {
+    analogWrite(RIGHT_PWM_PIN, wheel_speed.rightSpeed);
+    analogWrite(LEFT_PWN_PIN, wheel_speed.leftSpeed);
+  }
+
+  // restore the pins to their original state
+  digitalWrite(LEFT_DIR_PIN, originalLeftPinDir);
+  digitalWrite(RIGHT_DIR_PIN, originalRightPinDir);
 }
