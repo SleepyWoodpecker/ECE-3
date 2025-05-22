@@ -70,7 +70,7 @@ void setup() {
 
   // set the data rate in bits/second for serial data transmission
   Serial.begin(9600); 
-  delay(20); //Wait 2 seconds before starting 
+  delay(200); //Wait 2 seconds before starting 
   // Serial.println("BEGIN");
 
   updateLeftWheelSpeed(30);
@@ -84,36 +84,34 @@ void loop() {
 
   ECE3_read_IR(sensorValues);
 
-  // convert all sensor values to floats
+  // go left when heading out on the split, go right when heading back on the split
+  if (isSplit()) {
+    turnLeft();
+    return; 
+  }
+
+  if (isDoubleLine()) {
+    digitalWrite(LED_RF, HIGH);
+    // Serial.println("Saw double");
+    removeExtraSide();
+  } else {
+    digitalWrite(LED_RF, LOW);
+  }
+
+
+  // for (int i =0; i < NUM_SENSORS; ++i) {
+  //   Serial.print(sensorValues[i]);
+  //   Serial.print(" | ");
+  // }
+  // Serial.println();
+
+  // get sensorvalues as a float
   for (int i = 0; i < NUM_SENSORS; ++i) {
     floatSensorValues[i] = (float)sensorValues[i];
   }
 
+
   float sensorTotal = getNormalizedValues(normalizedValues);
-  #ifdef IS_DEBUG
-  Serial.println(sensorTotal);
-  #endif
-
-  // go left when heading out on the split, go right when heading back on the split
-  if (isSplit()) {
-    digitalWrite(LED_RF, HIGH);
-
-    // #ifdef IS_DEBUG
-    // Serial.println("THIS IS THE SPLIT");
-    // #endif
-
-    turnLeft();
-
-    return;
-    
-  } else {
-    digitalWrite(LED_RF, LOW);
-
-    // #ifdef IS_DEBUG
-    // Serial.println("THERE IS NO SPLIT HERE");
-    // #endif
-  }
-
   float errorTerm = calculate1514128Error(normalizedValues);
 
   #ifdef IS_DEBUG
@@ -122,6 +120,9 @@ void loop() {
 
   updateRightWheelSpeed(errorTerm);
   updateLeftWheelSpeed(errorTerm);
+
+  // I should check how straight its path is and debug from there
+  // delay(1);
 }
 
 float getNormalizedValues(float results[]) {
@@ -240,7 +241,25 @@ Pattern for arch:
 2027.00 | 1607.00 | 680.00 | 702.00 | 771.00 | 2500.00 | 863.00 | 748.00 | SENSOR VALUES END
 */
 bool isSplit() {
-  return (float)sensorValues[0] < BLACK_LINE_TRESHOLD && (float)sensorValues[1] < BLACK_LINE_TRESHOLD && (float)sensorValues[2] < BLACK_LINE_TRESHOLD &&(float)sensorValues[3] >= BLACK_LINE_TRESHOLD && (float)sensorValues[4] >= BLACK_LINE_TRESHOLD && (float)sensorValues[5] >= BLACK_LINE_TRESHOLD && (float)sensorValues[6] < BLACK_LINE_TRESHOLD && (float)sensorValues[7] < BLACK_LINE_TRESHOLD;
+  return floatSensorValues[0] < BLACK_LINE_TRESHOLD && floatSensorValues[1] < BLACK_LINE_TRESHOLD && floatSensorValues[2] < BLACK_LINE_TRESHOLD &&floatSensorValues[3] >= BLACK_LINE_TRESHOLD && floatSensorValues[4] >= BLACK_LINE_TRESHOLD && floatSensorValues[5] >= BLACK_LINE_TRESHOLD && floatSensorValues[6] < BLACK_LINE_TRESHOLD && floatSensorValues[7] < BLACK_LINE_TRESHOLD;
+}
+
+// to speed it up, just get the unsigned representation for the treshold values
+bool isDoubleLine() {
+  int blackLineCount = 0;
+  for (int i = 0; i < NUM_SENSORS; ++i) {
+    if (floatSensorValues[i] >= BLACK_LINE_TRESHOLD) {
+      ++blackLineCount;
+    }
+  }
+
+  return blackLineCount == 2;
+}
+
+void removeExtraSide() {
+  for (int i = 0; i < 4; ++i) {
+    sensorValues[i] = 650;
+  }
 }
 
 void turnLeft() {
