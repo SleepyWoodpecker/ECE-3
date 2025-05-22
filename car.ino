@@ -88,9 +88,7 @@ void loop() {
   if (isSplit()) {
     turnLeft();
     return; 
-  }
-
-  if (isDoubleLine()) {
+  } else if (isDoubleLine()) {
     digitalWrite(LED_RF, HIGH);
     // Serial.println("Saw double");
     removeExtraSide();
@@ -296,7 +294,7 @@ void turnLeft() {
 
   updateLeftWheelSpeed(30);
   updateRightWheelSpeed(30);
-  delay(TURN_TIMEOUT_MILLIS);
+  delay(TURN_TIMEOUT_MILLIS - 200);
 }
 
 void blinkYellowLED() {
