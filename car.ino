@@ -20,9 +20,9 @@ const int LED_RF = 41;
 #define RIGHT_PWM_PIN 39
 
 #define MAX_ERROR 15000
-#define BASE_SPEED 30
+#define BASE_SPEED 50
 #define REVERSE_SPEED 20
-#define REVERSE_COUNTER_TRIGGER 10
+#define REVERSE_COUNTER_TRIGGER 3
 
 uint16_t sensorValues[8];
 uint16_t minTerms[] = {805, 728, 711, 688, 640, 758, 734, 805};
