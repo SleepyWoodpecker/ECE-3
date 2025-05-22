@@ -3,7 +3,8 @@
 const int LED_RF = 41;
 
 #define NUM_SENSORS 8
-#define KP 0.005
+#define KP 0.003
+#define KD 0.06
 #define ERROR_TERM_TOLERANCE 200
 
 #define TURN_COUNTS 3
@@ -28,6 +29,7 @@ uint16_t minTerms[] = {805, 728, 711, 688, 640, 758, 734, 805};
 uint16_t maxDiff[] = {1695, 1772, 1789, 1254, 1515, 1742, 1766, 1695};
 float floatSensorValues[NUM_SENSORS];
 float normalizedValues[NUM_SENSORS];
+float previousErrorTerm = 0;
 
 uint8_t rightReverseCounter = 0;
 uint8_t leftReverseCounter = 0;
@@ -78,30 +80,19 @@ void setup() {
 }
 
 void loop() {
-   #ifdef IS_DEBUG
+  #ifdef IS_DEBUG
   delay(1000);
   #endif
 
   ECE3_read_IR(sensorValues);
 
   // go left when heading out on the split, go right when heading back on the split
-  if (isSplit()) {
-    turnLeft();
-    return; 
-  } else if (isDoubleLine()) {
+  if (isDoubleLine() || isSplit()) {
     digitalWrite(LED_RF, HIGH);
-    // Serial.println("Saw double");
     removeExtraSide();
   } else {
     digitalWrite(LED_RF, LOW);
   }
-
-
-  // for (int i =0; i < NUM_SENSORS; ++i) {
-  //   Serial.print(sensorValues[i]);
-  //   Serial.print(" | ");
-  // }
-  // Serial.println();
 
   // get sensorvalues as a float
   for (int i = 0; i < NUM_SENSORS; ++i) {
@@ -118,6 +109,8 @@ void loop() {
 
   updateRightWheelSpeed(errorTerm);
   updateLeftWheelSpeed(errorTerm);
+
+  previousErrorTerm = errorTerm;
 
   // I should check how straight its path is and debug from there
   // delay(1);
@@ -167,7 +160,7 @@ void updateLeftWheelSpeed(float errorTerm) {
     return;
   }
 
-  wheel_speed.leftSpeed = BASE_SPEED + KP * errorTerm;
+  wheel_speed.leftSpeed = BASE_SPEED + KP * errorTerm + KD * (errorTerm - previousErrorTerm) / 6;
 
   if (errorTerm < 0) { // if on left side
     digitalWrite(LEFT_DIR_PIN, LOW); // turn left wheel backwards
@@ -194,7 +187,7 @@ void updateRightWheelSpeed(float errorTerm) {
     return;
   }
 
-  wheel_speed.rightSpeed = BASE_SPEED + KP * errorTerm;
+  wheel_speed.rightSpeed = BASE_SPEED + KP * errorTerm + KD * (errorTerm - previousErrorTerm) / 6;
 
   if (errorTerm > 0) { // if on right side
     rightReverseCounter = 0;
@@ -239,19 +232,58 @@ Pattern for arch:
 2027.00 | 1607.00 | 680.00 | 702.00 | 771.00 | 2500.00 | 863.00 | 748.00 | SENSOR VALUES END
 */
 bool isSplit() {
-  return floatSensorValues[0] < BLACK_LINE_TRESHOLD && floatSensorValues[1] < BLACK_LINE_TRESHOLD && floatSensorValues[2] < BLACK_LINE_TRESHOLD &&floatSensorValues[3] >= BLACK_LINE_TRESHOLD && floatSensorValues[4] >= BLACK_LINE_TRESHOLD && floatSensorValues[5] >= BLACK_LINE_TRESHOLD && floatSensorValues[6] < BLACK_LINE_TRESHOLD && floatSensorValues[7] < BLACK_LINE_TRESHOLD;
+  return floatSensorValues[0] < BLACK_LINE_TRESHOLD && 
+  floatSensorValues[1] < BLACK_LINE_TRESHOLD && 
+  floatSensorValues[2] < BLACK_LINE_TRESHOLD &&
+  floatSensorValues[3] >= BLACK_LINE_TRESHOLD && 
+  floatSensorValues[4] >= BLACK_LINE_TRESHOLD && 
+  floatSensorValues[5] >= BLACK_LINE_TRESHOLD && 
+  floatSensorValues[6] < BLACK_LINE_TRESHOLD && 
+  floatSensorValues[7] < BLACK_LINE_TRESHOLD;
 }
 
 // to speed it up, just get the unsigned representation for the treshold values
 bool isDoubleLine() {
-  int blackLineCount = 0;
-  for (int i = 0; i < NUM_SENSORS; ++i) {
-    if (floatSensorValues[i] >= BLACK_LINE_TRESHOLD) {
-      ++blackLineCount;
-    }
-  }
-
-  return blackLineCount == 2;
+  return (
+    floatSensorValues[0] >= BLACK_LINE_TRESHOLD && 
+    floatSensorValues[1] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[2] < BLACK_LINE_TRESHOLD &&
+    floatSensorValues[3] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[4] >= BLACK_LINE_TRESHOLD && 
+    floatSensorValues[5] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[6] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[7] < BLACK_LINE_TRESHOLD
+  ) ^ 
+  (
+    floatSensorValues[0] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[1] >= BLACK_LINE_TRESHOLD && 
+    floatSensorValues[2] < BLACK_LINE_TRESHOLD &&
+    floatSensorValues[3] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[4] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[5] >= BLACK_LINE_TRESHOLD && 
+    floatSensorValues[6] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[7] < BLACK_LINE_TRESHOLD
+  ) ^ 
+  (
+    floatSensorValues[0] >= BLACK_LINE_TRESHOLD && 
+    floatSensorValues[1] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[2] < BLACK_LINE_TRESHOLD &&
+    floatSensorValues[3] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[4] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[5] >= BLACK_LINE_TRESHOLD && 
+    floatSensorValues[6] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[7] < BLACK_LINE_TRESHOLD
+  ) ^ 
+  (
+    floatSensorValues[0] >= BLACK_LINE_TRESHOLD && 
+    floatSensorValues[1] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[2] < BLACK_LINE_TRESHOLD &&
+    floatSensorValues[3] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[4] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[5] < BLACK_LINE_TRESHOLD && 
+    floatSensorValues[6] >= BLACK_LINE_TRESHOLD && 
+    floatSensorValues[7] < BLACK_LINE_TRESHOLD
+  );
 }
 
 void removeExtraSide() {
