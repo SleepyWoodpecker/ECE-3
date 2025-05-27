@@ -11,6 +11,7 @@ const int LED_RF = 41;
 #define TURN_TIMEOUT_MILLIS 500
 #define BLACK_LINE_TRESHOLD 1600
 #define SPLIT_BLACK_LINE_COUNT 3
+#define IS_END 2500
 
 #define LEFT_NSLP_PIN 31 // nslp ==> awake & ready for PWM
 #define LEFT_DIR_PIN 29
@@ -76,8 +77,8 @@ void setup() {
   delay(200); //Wait 2 seconds before starting 
   // Serial.println("BEGIN");
 
-  updateLeftWheelSpeed(30);
-  updateRightWheelSpeed(30);
+  analogWrite(LEFT_PWN_PIN, 40);
+  analogWrite(RIGHT_PWM_PIN, 40);
 }
 
 void loop() {
@@ -87,15 +88,15 @@ void loop() {
 
   ECE3_read_IR(sensorValues);
 
-  if (currentDirection == 1) {
-    removeExtraSide();
-  }
-
   // get sensorvalues as a float
   for (int i = 0; i < NUM_SENSORS; ++i) {
     floatSensorValues[i] = (float)sensorValues[i];
   }
 
+  if (isEnd()) {
+    turnAroundAndMoveForward();
+    return;
+  }
 
   float sensorTotal = getNormalizedValues(normalizedValues);
   float errorTerm = calculate1514128Error(normalizedValues);
@@ -206,6 +207,16 @@ void updateRightWheelSpeed(float errorTerm) {
   analogWrite(RIGHT_PWM_PIN, wheel_speed.rightSpeed);
 }
 
+bool isEnd() {
+    for (int i = 0; i < NUM_SENSORS; ++i) {
+        if (floatSensorValues[i] != IS_END) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 /*
 Based on experimentation, the determined unique pattern for what a split looks like is the followig:
 Pattern for split:
@@ -287,28 +298,16 @@ bool isDoubleLine() {
   );
 }
 
-void removeExtraSide() {
-    // for (int i = 4; i < NUM_SENSORS; ++i) {
-    //   sensorValues[i] = 650;
-    // }
+void turnAroundAndMoveForward() {
+    digitalWrite(RIGHT_DIR_PIN, HIGH);
+    digitalWrite(LEFT_DIR_PIN,LOW);
+
+    analogWrite(LEFT_PWN_PIN, 60);
+    analogWrite(RIGHT_PWM_PIN, 60);
+    delay(800);
+
+    analogWrite(LEFT_PWN_PIN, 30);
+    analogWrite(RIGHT_PWM_PIN, 30);
+    digitalWrite(RIGHT_DIR_PIN,LOW);
+    digitalWrite(LEFT_DIR_PIN,LOW);
 }
-
-/*
-Issues with car:
-1. Cannot start properly on points that aren’t 1
-2. Cannot detect the split / arch, though there may be a solution for that
-3. Donut at the end
-*/
-
-/*
-I think that the split and arch detection should be the key here
-Sometimes the car also stalls, but idk why either
-*/
-
-/*
-Priorities for tmr:
-  1. detect that the split/arch has occurred
-  2. Go left on the way up (should return early and add some delay into the function)
-  3. make a donut at the end (probably have some readings)
-  4. the car sometimes stalls -> should try to identify the portion of the track at which it stalls and debug print what is happening there
-*/
