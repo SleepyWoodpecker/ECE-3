@@ -87,12 +87,8 @@ void loop() {
 
   ECE3_read_IR(sensorValues);
 
-  // go left when heading out on the split, go right when heading back on the split
-  if (isDoubleLine() || isSplit()) {
-    digitalWrite(LED_RF, HIGH);
+  if (currentDirection == 1) {
     removeExtraSide();
-  } else {
-    digitalWrite(LED_RF, LOW);
   }
 
   // get sensorvalues as a float
@@ -133,16 +129,20 @@ float getNormalizedValues(float results[]) {
 
 // when it veers off to the right, the error is negative
 // when it veers off to the left, the error is positive
+
+// altering weighting scheme works for split back down the track
+// altering weighting scheme works for arch back down the track too
+// car works fine for the esses as well
 float calculate1514128Error(float normalized_values[]) {  
   return (
     normalized_values[0] * -15 +
     normalized_values[1] * -14 +
     normalized_values[2] * -12 +
     normalized_values[3] * -8 +
-    normalized_values[4] * 8 +
-    normalized_values[5] * 12 +
-    normalized_values[6] * 14 +
-    normalized_values[7] * 15
+    normalized_values[4] * 4 +
+    normalized_values[5] * 6 +
+    normalized_values[6] * 7 +
+    normalized_values[7] * 12
   ) / 8;
 }
 
@@ -288,16 +288,9 @@ bool isDoubleLine() {
 }
 
 void removeExtraSide() {
-  if (currentDirection == 0) {
-    for (int i = 0; i < 4; ++i) {
-      sensorValues[i] = 650;
-    }
-  }
-  else {
-    for (int i = 4; i < NUM_SENSORS; ++i) {
-      sensorValues[i] = 650;
-    }
-  }
+    // for (int i = 4; i < NUM_SENSORS; ++i) {
+    //   sensorValues[i] = 650;
+    // }
 }
 
 /*
