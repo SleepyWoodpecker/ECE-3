@@ -31,7 +31,7 @@ uint16_t maxDiff[] = {1695, 1772, 1789, 1254, 1515, 1742, 1766, 1695};
 float floatSensorValues[NUM_SENSORS];
 float normalizedValues[NUM_SENSORS];
 float previousErrorTerm = 0;
-int currentDirection = 1; // 0 for up, 1 for down
+int currentDirection = 0; // 0 for up, 1 for down
 
 uint8_t rightReverseCounter = 0;
 uint8_t leftReverseCounter = 0;
@@ -95,6 +95,7 @@ void loop() {
 
   if (isEnd()) {
     turnAroundAndMoveForward();
+    currentDirection = 1;
     return;
   }
 
@@ -135,15 +136,28 @@ float getNormalizedValues(float results[]) {
 // altering weighting scheme works for arch back down the track too
 // car works fine for the esses as well
 float calculate1514128Error(float normalized_values[]) {  
-  return (
-    normalized_values[0] * -15 +
-    normalized_values[1] * -14 +
-    normalized_values[2] * -12 +
-    normalized_values[3] * -8 +
-    normalized_values[4] * 4 +
-    normalized_values[5] * 6 +
-    normalized_values[6] * 7 +
-    normalized_values[7] * 12
+    if (currentDirection == 0) {
+        return (
+            normalized_values[0] * -15 +
+            normalized_values[1] * -14 +
+            normalized_values[2] * -12 +
+            normalized_values[3] * -8 +
+            normalized_values[4] * 8 * 1.9 +
+            normalized_values[5] * 12 * 1.9 +
+            normalized_values[6] * 14 * 1.9 +
+            normalized_values[7] * 15 * 1.9
+        );
+    }
+  
+    return (
+    normalized_values[0] * -15 * 1.9 +
+    normalized_values[1] * -14 * 1.9 +
+    normalized_values[2] * -12 * 1.9+
+    normalized_values[3] * -8 * 1.9 +
+    normalized_values[4] * 8 +
+    normalized_values[5] * 12 +
+    normalized_values[6] * 14 +
+    normalized_values[7] * 15
   ) / 8;
 }
 
@@ -215,87 +229,6 @@ bool isEnd() {
     }
 
     return true;
-}
-
-/*
-Based on experimentation, the determined unique pattern for what a split looks like is the followig:
-Pattern for split:
-0.     |  1.    | 2.      | 3       | 4       |     5        | 6          | 7
-827.00 | 746.00 | 1351.00 | 2071.00 | 1605.00 | 2213.00 | 827.00 | 827.00 | SENSOR VALUES END
-823.00 | 732.00 | 1192.00 | 2289.00 | 1659.00 | 1916.00 | 754.00 | 754.00 | SENSOR VALUES END
-840.00 | 748.00 | 1171.00 | 2359.00 | 1611.00 | 1797.00 | 771.00 | 771.00 | SENSOR VALUES END
-860.00 | 795.00 | 1159.00 | 2374.00 | 1623.00 | 1953.00 | 818.00 | 841.00 | SENSOR VALUES END
-
-
-This was to avoid the turning behavior at the following other components:
-Pattern for ESSES:
-719.00 | 627.00 | 627.00 | 787.00 | 1606.00 | 2500.00 | 1606.00 | 1064.00 | SENSOR VALUES END -> at the end of the ESS
-769.00 | 746.00 | 769.00 | 1067.00 | 2120.00 | 2500.00 | 1618.00 | 1160.00 | SENSOR VALUES END -> at the end of the ESS
-875.00 | 806.00 | 806.00 | 1127.00 | 2326.00 | 2466.00 | 1604.00 | 1358.00 | SENSOR VALUES END -> at the end of the ESS
-687.00 | 595.00 | 573.00 | 687.00 | 1639.00 | 2500.00 | 1603.00 | 1418.00 | SENSOR VALUES END
-
-
-Pattern for arch:
-2500.00 | 907.00   | 792.00  | 815.00   | 1666.00 | 1620.00 | 838.00 | 838.00 | SENSOR VALUES END
-2500.00 | 898.00   | 806.00 | 829.00  | 1694.00 | 1624.00 | 806.00 | 783.00 | SENSOR VALUES END
-2270.00 | 875.00    | 760.00 | 806.00 | 1614.00 | 1638.00 | 829.00 | 852.00 | SENSOR VALUES END
-1890.00 | 1657.00 | 706.00 | 683.00 | 683.00 | 2078.00 | 1379.00 | 775.00 | SENSOR VALUES END
-2074.00 | 1632.00 | 737.00 | 692.00 | 737.00 | 2424.00 | 1198.00 | 783.00 | SENSOR VALUES END
-2027.00 | 1607.00 | 680.00 | 702.00 | 771.00 | 2500.00 | 863.00 | 748.00 | SENSOR VALUES END
-*/
-bool isSplit() {
-  return floatSensorValues[0] < BLACK_LINE_TRESHOLD && 
-  floatSensorValues[1] < BLACK_LINE_TRESHOLD && 
-  floatSensorValues[2] < BLACK_LINE_TRESHOLD &&
-  floatSensorValues[3] >= BLACK_LINE_TRESHOLD && 
-  floatSensorValues[4] >= BLACK_LINE_TRESHOLD && 
-  floatSensorValues[5] >= BLACK_LINE_TRESHOLD && 
-  floatSensorValues[6] < BLACK_LINE_TRESHOLD && 
-  floatSensorValues[7] < BLACK_LINE_TRESHOLD;
-}
-
-// to speed it up, just get the unsigned representation for the treshold values
-bool isDoubleLine() {
-  return (
-    floatSensorValues[0] >= BLACK_LINE_TRESHOLD && 
-    floatSensorValues[1] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[2] < BLACK_LINE_TRESHOLD &&
-    floatSensorValues[3] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[4] >= BLACK_LINE_TRESHOLD && 
-    floatSensorValues[5] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[6] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[7] < BLACK_LINE_TRESHOLD
-  ) ^ 
-  (
-    floatSensorValues[0] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[1] >= BLACK_LINE_TRESHOLD && 
-    floatSensorValues[2] < BLACK_LINE_TRESHOLD &&
-    floatSensorValues[3] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[4] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[5] >= BLACK_LINE_TRESHOLD && 
-    floatSensorValues[6] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[7] < BLACK_LINE_TRESHOLD
-  ) ^ 
-  (
-    floatSensorValues[0] >= BLACK_LINE_TRESHOLD && 
-    floatSensorValues[1] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[2] < BLACK_LINE_TRESHOLD &&
-    floatSensorValues[3] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[4] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[5] >= BLACK_LINE_TRESHOLD && 
-    floatSensorValues[6] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[7] < BLACK_LINE_TRESHOLD
-  ) ^ 
-  (
-    floatSensorValues[0] >= BLACK_LINE_TRESHOLD && 
-    floatSensorValues[1] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[2] < BLACK_LINE_TRESHOLD &&
-    floatSensorValues[3] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[4] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[5] < BLACK_LINE_TRESHOLD && 
-    floatSensorValues[6] >= BLACK_LINE_TRESHOLD && 
-    floatSensorValues[7] < BLACK_LINE_TRESHOLD
-  );
 }
 
 void turnAroundAndMoveForward() {

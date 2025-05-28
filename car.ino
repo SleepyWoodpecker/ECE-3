@@ -11,6 +11,7 @@ const int LED_RF = 41;
 #define TURN_TIMEOUT_MILLIS 500
 #define BLACK_LINE_TRESHOLD 1600
 #define SPLIT_BLACK_LINE_COUNT 3
+#define IS_END 2500
 
 #define LEFT_NSLP_PIN 31 // nslp ==> awake & ready for PWM
 #define LEFT_DIR_PIN 29
@@ -30,7 +31,7 @@ uint16_t maxDiff[] = {1695, 1772, 1789, 1254, 1515, 1742, 1766, 1695};
 float floatSensorValues[NUM_SENSORS];
 float normalizedValues[NUM_SENSORS];
 float previousErrorTerm = 0;
-int currentDirection = 1; // 0 for up, 1 for down
+int currentDirection = 0; // 0 for up, 1 for down
 
 uint8_t rightReverseCounter = 0;
 uint8_t leftReverseCounter = 0;
@@ -76,8 +77,8 @@ void setup() {
   delay(200); //Wait 2 seconds before starting 
   // Serial.println("BEGIN");
 
-  updateLeftWheelSpeed(30);
-  updateRightWheelSpeed(30);
+  analogWrite(LEFT_PWN_PIN, 40);
+  analogWrite(RIGHT_PWM_PIN, 40);
 }
 
 void loop() {
@@ -87,19 +88,16 @@ void loop() {
 
   ECE3_read_IR(sensorValues);
 
-  // go left when heading out on the split, go right when heading back on the split
-  if (isDoubleLine() || isSplit()) {
-    digitalWrite(LED_RF, HIGH);
-    removeExtraSide();
-  } else {
-    digitalWrite(LED_RF, LOW);
-  }
-
   // get sensorvalues as a float
   for (int i = 0; i < NUM_SENSORS; ++i) {
     floatSensorValues[i] = (float)sensorValues[i];
   }
 
+  if (isEnd()) {
+    turnAroundAndMoveForward();
+    currentDirection = 1;
+    return;
+  }
 
   float sensorTotal = getNormalizedValues(normalizedValues);
   float errorTerm = calculate1514128Error(normalizedValues);
@@ -133,16 +131,33 @@ float getNormalizedValues(float results[]) {
 
 // when it veers off to the right, the error is negative
 // when it veers off to the left, the error is positive
+
+// altering weighting scheme works for split back down the track
+// altering weighting scheme works for arch back down the track too
+// car works fine for the esses as well
 float calculate1514128Error(float normalized_values[]) {  
-  return (
+    if (currentDirection == 0) {
+        return (
+            normalized_values[0] * -10 +
+            normalized_values[1] * -7 +
+            normalized_values[2] * -6 +
+            normalized_values[3] * -4 +
+            normalized_values[4] * 8 +
+            normalized_values[5] * 12 +
+            normalized_values[6] * 14 +
+            normalized_values[7] * 15
+        );
+    }
+  
+    return (
     normalized_values[0] * -15 +
     normalized_values[1] * -14 +
     normalized_values[2] * -12 +
     normalized_values[3] * -8 +
-    normalized_values[4] * 8 +
-    normalized_values[5] * 12 +
-    normalized_values[6] * 14 +
-    normalized_values[7] * 15
+    normalized_values[4] * 4 +
+    normalized_values[5] * 6 +
+    normalized_values[6] * 7 +
+    normalized_values[7] * 10
   ) / 8;
 }
 
@@ -204,6 +219,16 @@ void updateRightWheelSpeed(float errorTerm) {
   }
 
   analogWrite(RIGHT_PWM_PIN, wheel_speed.rightSpeed);
+}
+
+bool isEnd() {
+    for (int i = 0; i < NUM_SENSORS; ++i) {
+        if (floatSensorValues[i] != IS_END) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /*
@@ -287,35 +312,16 @@ bool isDoubleLine() {
   );
 }
 
-void removeExtraSide() {
-  if (currentDirection == 0) {
-    for (int i = 0; i < 4; ++i) {
-      sensorValues[i] = 650;
-    }
-  }
-  else {
-    for (int i = 4; i < NUM_SENSORS; ++i) {
-      sensorValues[i] = 650;
-    }
-  }
+void turnAroundAndMoveForward() {
+    digitalWrite(RIGHT_DIR_PIN, HIGH);
+    digitalWrite(LEFT_DIR_PIN,LOW);
+
+    analogWrite(LEFT_PWN_PIN, 60);
+    analogWrite(RIGHT_PWM_PIN, 60);
+    delay(800);
+
+    analogWrite(LEFT_PWN_PIN, 30);
+    analogWrite(RIGHT_PWM_PIN, 30);
+    digitalWrite(RIGHT_DIR_PIN,LOW);
+    digitalWrite(LEFT_DIR_PIN,LOW);
 }
-
-/*
-Issues with car:
-1. Cannot start properly on points that aren’t 1
-2. Cannot detect the split / arch, though there may be a solution for that
-3. Donut at the end
-*/
-
-/*
-I think that the split and arch detection should be the key here
-Sometimes the car also stalls, but idk why either
-*/
-
-/*
-Priorities for tmr:
-  1. detect that the split/arch has occurred
-  2. Go left on the way up (should return early and add some delay into the function)
-  3. make a donut at the end (probably have some readings)
-  4. the car sometimes stalls -> should try to identify the portion of the track at which it stalls and debug print what is happening there
-*/
