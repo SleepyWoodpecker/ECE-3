@@ -5,9 +5,8 @@
 const int LED_RF = 41;
 
 #define NUM_SENSORS 8
-#define KP 0.005
-#define KD 0.02
-#define ERROR_TERM_TOLERANCE 100
+#define KP 0.015
+#define KD 0.15
 
 #define TURN_COUNTS 3
 #define TURN_TIMEOUT_MILLIS 500
@@ -23,9 +22,9 @@ const int LED_RF = 41;
 #define RIGHT_PWM_PIN 39
 
 #define MAX_ERROR 15000
-#define BASE_SPEED 50
+#define BASE_SPEED 10
 #define REVERSE_SPEED 20
-#define REVERSE_COUNTER_TRIGGER 5
+#define REVERSE_COUNTER_TRIGGER 1
 
 uint16_t sensorValues[8];
 uint16_t minTerms[] = {805, 728, 711, 688, 640, 758, 734, 805};
@@ -141,6 +140,16 @@ float getNormalizedValues(float results[]) {
 // altering weighting scheme works for arch back down the track too
 // car works fine for the esses as well
 float calculate1514128Error(float normalized_values[]) {  
+  // return (normalized_values[0] * -15 +
+  //           normalized_values[1] * -14 +
+  //           normalized_values[2] * -12 +
+  //           normalized_values[3] * -8 +
+  //           normalized_values[4] * 8 +
+  //           normalized_values[5] * 12 +
+  //           normalized_values[6] * 14 +
+  //           normalized_values[7] * 15
+  //       / 8);
+
     if (currentDirection == 0) {
         return (
             normalized_values[0] * -15 +
@@ -162,68 +171,38 @@ float calculate1514128Error(float normalized_values[]) {
     normalized_values[4] * 8 +
     normalized_values[5] * 12 +
     normalized_values[6] * 14 +
-    normalized_values[7] * 15
+    normalized_values[7] * 15 
   ) / 8;
 }
 
 // when veering off to the left, this becomes positive
 // when veering off to the right, this becomes negative
 void updateLeftWheelSpeed(float errorTerm) {
-  
-  // based on experimentation, the tolerable error term is about 200
-  if (abs(errorTerm) <= ERROR_TERM_TOLERANCE) {
-    digitalWrite(RIGHT_DIR_PIN, LOW);
+  wheel_speed.leftSpeed = BASE_SPEED - KP * errorTerm - KD * (errorTerm - previousErrorTerm);
 
-    #ifdef IS_DEBUG
-    Serial.println("Exiting because margin not high enough");
-    #endif
-
-    return;
-  }
-
-  wheel_speed.leftSpeed = BASE_SPEED + KP * errorTerm + KD * (errorTerm - previousErrorTerm) / 6;
-
-  if (errorTerm < 0) { // if on left side
+  if (wheel_speed.leftSpeed > 0) { // if on left side
     digitalWrite(LEFT_DIR_PIN, LOW); // turn left wheel backwards
   } else {
-    leftReverseCounter += 1;
-
-    if (leftReverseCounter >= REVERSE_COUNTER_TRIGGER) {
-      digitalWrite(LEFT_DIR_PIN, HIGH);
-      wheel_speed.leftSpeed = REVERSE_SPEED;
-    }
+              digitalWrite(LEFT_DIR_PIN, HIGH);
   }
 
-  analogWrite(LEFT_PWN_PIN, max(30, min(wheel_speed.leftSpeed, 130)));
+  analogWrite(LEFT_PWN_PIN, max(30, min(abs(wheel_speed.leftSpeed), 130)));
 }
 
 void updateRightWheelSpeed(float errorTerm) {
-  if (abs(errorTerm) <= ERROR_TERM_TOLERANCE) {
-    digitalWrite(RIGHT_DIR_PIN, LOW);
 
-    #ifdef IS_DEBUG
-    Serial.println("Exiting because margin not high enough");
-    #endif
+  wheel_speed.rightSpeed = BASE_SPEED + KP * errorTerm + KD * (errorTerm - previousErrorTerm);
 
-    return;
-  }
-
-  wheel_speed.rightSpeed = BASE_SPEED + KP * errorTerm + KD * (errorTerm - previousErrorTerm) / 6;
-
-  if (errorTerm > 0) { // if on right side
+  if (wheel_speed.rightSpeed > 0) { // if on right side
     rightReverseCounter = 0;
     digitalWrite(RIGHT_DIR_PIN, LOW);
   } 
   else {
-    rightReverseCounter += 1;
-
-    if (rightReverseCounter >= REVERSE_COUNTER_TRIGGER) {
+  
       digitalWrite(RIGHT_DIR_PIN, HIGH);
-      wheel_speed.rightSpeed = REVERSE_SPEED;
-    }
   }
 
-  analogWrite(RIGHT_PWM_PIN, max(30, min(wheel_speed.rightSpeed, 130)));
+  analogWrite(RIGHT_PWM_PIN, max(30, min(abs(wheel_speed.rightSpeed), 130)));
 }
 
 bool isEnd() {
@@ -240,7 +219,7 @@ bool isEnd() {
 
   digitalWrite(RIGHT_NSLP_PIN,LOW);
   digitalWrite(LEFT_NSLP_PIN,LOW);
-  delay(3000);
+  delay(500);
 
   ECE3_read_IR(sensorValues);
 
