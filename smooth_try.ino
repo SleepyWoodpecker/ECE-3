@@ -90,6 +90,9 @@ void loop() {
 
   ECE3_read_IR(sensorValues);
 
+  digitalWrite(RIGHT_DIR_PIN, LOW);
+  digitalWrite(LEFT_DIR_PIN, LOW);
+
   // get sensorvalues as a float
   for (int i = 0; i < NUM_SENSORS; ++i) {
     floatSensorValues[i] = (float)sensorValues[i];
@@ -100,9 +103,6 @@ void loop() {
     currentDirection = 1;
     return;
   }
-
-  digitalWrite(RIGHT_NSLP_PIN,HIGH);
-  digitalWrite(LEFT_NSLP_PIN,HIGH);
 
   float sensorTotal = getNormalizedValues(normalizedValues);
   float errorTerm = calculate1514128Error(normalizedValues);
@@ -151,7 +151,7 @@ float calculate1514128Error(float normalized_values[]) {
             normalized_values[5] * 12 * 1.9 +
             normalized_values[6] * 14 * 1.9 +
             normalized_values[7] * 15 * 1.9
-        ) / 8;
+        );
     }
   
     return (
@@ -173,25 +173,17 @@ void updateLeftWheelSpeed(float errorTerm) {
   // based on experimentation, the tolerable error term is about 200
   if (abs(errorTerm) <= ERROR_TERM_TOLERANCE) {
     digitalWrite(RIGHT_DIR_PIN, LOW);
-
-    #ifdef IS_DEBUG
-    Serial.println("Exiting because margin not high enough");
-    #endif
-
     return;
   }
 
-  wheel_speed.leftSpeed = BASE_SPEED + KP * errorTerm + KD * (errorTerm - previousErrorTerm) / 6;
+  wheel_speed.leftSpeed = BASE_SPEED - KP * errorTerm - KD * (errorTerm - previousErrorTerm) / 6;
 
-  if (errorTerm < 0) { // if on left side
-    digitalWrite(LEFT_DIR_PIN, LOW); // turn left wheel backwards
-  } else {
-    leftReverseCounter += 1;
-
-    if (leftReverseCounter >= REVERSE_COUNTER_TRIGGER) {
-      digitalWrite(LEFT_DIR_PIN, HIGH);
-      wheel_speed.leftSpeed = REVERSE_SPEED;
-    }
+  if (wheel_speed.rightSpeed < 0) { // if on right side
+    digitalWrite(LEFT_DIR_PIN, HIGH);
+    wheel_speed.leftSpeed *= 0.75;
+  } 
+  else {
+    digitalWrite(LEFT_DIR_PIN, LOW);
   }
 
   analogWrite(LEFT_PWN_PIN, max(30, min(wheel_speed.leftSpeed, 130)));
@@ -200,27 +192,17 @@ void updateLeftWheelSpeed(float errorTerm) {
 void updateRightWheelSpeed(float errorTerm) {
   if (abs(errorTerm) <= ERROR_TERM_TOLERANCE) {
     digitalWrite(RIGHT_DIR_PIN, LOW);
-
-    #ifdef IS_DEBUG
-    Serial.println("Exiting because margin not high enough");
-    #endif
-
     return;
   }
 
   wheel_speed.rightSpeed = BASE_SPEED + KP * errorTerm + KD * (errorTerm - previousErrorTerm) / 6;
 
-  if (errorTerm > 0) { // if on right side
-    rightReverseCounter = 0;
-    digitalWrite(RIGHT_DIR_PIN, LOW);
+  if (wheel_speed.rightSpeed < 0) { // if on right side
+    digitalWrite(RIGHT_DIR_PIN, HIGH);
+    wheel_speed.rightSpeed *= 0.75;
   } 
   else {
-    rightReverseCounter += 1;
-
-    if (rightReverseCounter >= REVERSE_COUNTER_TRIGGER) {
-      digitalWrite(RIGHT_DIR_PIN, HIGH);
-      wheel_speed.rightSpeed = REVERSE_SPEED;
-    }
+    digitalWrite(RIGHT_DIR_PIN, LOW);
   }
 
   analogWrite(RIGHT_PWM_PIN, max(30, min(wheel_speed.rightSpeed, 130)));
@@ -228,39 +210,14 @@ void updateRightWheelSpeed(float errorTerm) {
 
 bool isEnd() {
   float total = 0;
-  for (int i = 0; i < NUM_SENSORS; ++i) {
-      total += floatSensorValues[i];
-  }
+    for (int i = 0; i < NUM_SENSORS; ++i) {
+       total += floatSensorValues[i];
+    }
 
-  // return total >= 16800;
-
-  if (total < 16800) {
-    return false;
-  }
-
-  digitalWrite(RIGHT_NSLP_PIN,LOW);
-  digitalWrite(LEFT_NSLP_PIN,LOW);
-  delay(3000);
-
-  ECE3_read_IR(sensorValues);
-
-  // get sensorvalues as a float
-  for (int i = 0; i < NUM_SENSORS; ++i) {
-    floatSensorValues[i] = (float)sensorValues[i];
-  }
-
-  total = 0;
-  for (int i = 0; i < NUM_SENSORS; ++i) {
-      total += floatSensorValues[i];
-  }
-
-  return total >= 16800;
+    return total >= 16800;
 }
 
 void turnAroundAndMoveForward() {
-    digitalWrite(RIGHT_NSLP_PIN,HIGH);
-    digitalWrite(LEFT_NSLP_PIN,HIGH);
-
     digitalWrite(RIGHT_DIR_PIN, HIGH);
     digitalWrite(LEFT_DIR_PIN,LOW);
 
@@ -273,4 +230,3 @@ void turnAroundAndMoveForward() {
     digitalWrite(RIGHT_DIR_PIN,LOW);
     digitalWrite(LEFT_DIR_PIN,LOW);
 }
-
