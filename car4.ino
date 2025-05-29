@@ -1,17 +1,19 @@
 #include "ECE3.h"
 
+// this version is slow, but works!
+
 const int LED_RF = 41;
 
 #define NUM_SENSORS 8
-#define KP 0.001
-#define KD 0.01
-#define ERROR_TERM_TOLERANCE 200
+#define KP 0.005
+#define KD 0.02
+#define ERROR_TERM_TOLERANCE 100
 
 #define TURN_COUNTS 3
 #define TURN_TIMEOUT_MILLIS 500
 #define BLACK_LINE_TRESHOLD 1600
 #define SPLIT_BLACK_LINE_COUNT 3
-#define IS_END 2500
+#define IS_END 2300
 
 #define LEFT_NSLP_PIN 31 // nslp ==> awake & ready for PWM
 #define LEFT_DIR_PIN 29
@@ -23,7 +25,7 @@ const int LED_RF = 41;
 #define MAX_ERROR 15000
 #define BASE_SPEED 50
 #define REVERSE_SPEED 20
-#define REVERSE_COUNTER_TRIGGER 3
+#define REVERSE_COUNTER_TRIGGER 5
 
 uint16_t sensorValues[8];
 uint16_t minTerms[] = {805, 728, 711, 688, 640, 758, 734, 805};
@@ -189,7 +191,7 @@ void updateLeftWheelSpeed(float errorTerm) {
     }
   }
 
-  analogWrite(LEFT_PWN_PIN, min(30, max(150, wheel_speed.leftSpeed)));
+  analogWrite(LEFT_PWN_PIN, max(30, min(wheel_speed.leftSpeed, 130)));
 }
 
 void updateRightWheelSpeed(float errorTerm) {
@@ -218,17 +220,16 @@ void updateRightWheelSpeed(float errorTerm) {
     }
   }
 
-  analogWrite(RIGHT_PWM_PIN, min(30, max(150, wheel_speed.rightSpeed)));
+  analogWrite(RIGHT_PWM_PIN, max(30, min(wheel_speed.rightSpeed, 130)));
 }
 
 bool isEnd() {
+  float total = 0;
     for (int i = 0; i < NUM_SENSORS; ++i) {
-        if (floatSensorValues[i] != IS_END) {
-            return false;
-        }
+       total += floatSensorValues[i];
     }
 
-    return true;
+    return total >= 16800;
 }
 
 void turnAroundAndMoveForward() {
