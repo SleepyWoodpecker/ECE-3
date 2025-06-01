@@ -25,6 +25,7 @@ const int LED_RF = 41;
 #define BASE_SPEED 10
 #define REVERSE_SPEED 20
 #define REVERSE_COUNTER_TRIGGER 1
+#define START_TIME_STRAIGHT 1000
 
 uint16_t sensorValues[8];
 uint16_t minTerms[] = {805, 728, 711, 688, 640, 758, 734, 805};
@@ -37,6 +38,8 @@ int currentDirection = 0; // 0 for up, 1 for down
 uint8_t rightReverseCounter = 0;
 uint8_t leftReverseCounter = 0;
 
+unsigned long start_time = 0;
+
 struct WheelSpeed {
   int rightSpeed;
   int leftSpeed;
@@ -48,7 +51,6 @@ struct WheelSpeed {
 void setup() {
   pinMode(LED_RF, OUTPUT);
 
-// put your setup code here, to run once:
   pinMode(LEFT_NSLP_PIN,OUTPUT);
   pinMode(LEFT_DIR_PIN,OUTPUT);
   pinMode(LEFT_PWN_PIN,OUTPUT);
@@ -75,11 +77,12 @@ void setup() {
 
   // set the data rate in bits/second for serial data transmission
   Serial.begin(9600); 
-  delay(200); //Wait 2 seconds before starting 
-  // Serial.println("BEGIN");
+  delay(2000); //Wait 2 seconds before starting 
 
   analogWrite(LEFT_PWN_PIN, 40);
   analogWrite(RIGHT_PWM_PIN, 40);
+
+  start_time = millis();
 }
 
 void loop() {
@@ -104,7 +107,14 @@ void loop() {
   digitalWrite(LEFT_NSLP_PIN,HIGH);
 
   float sensorTotal = getNormalizedValues(normalizedValues);
-  float errorTerm = calculate1514128Error(normalizedValues);
+
+  float errorTerm = 0;
+  // if (millis() - start_time < START_TIME_STRAIGHT) {
+  //   errorTerm = calculateRegularError(normalizedValues);
+  // }
+  if (true) {
+    errorTerm = calculate1514128Error(normalizedValues);
+  }
 
   #ifdef IS_DEBUG
   Serial.println(errorTerm);
@@ -114,9 +124,6 @@ void loop() {
   updateLeftWheelSpeed(errorTerm);
 
   previousErrorTerm = errorTerm;
-
-  // I should check how straight its path is and debug from there
-  // delay(1);
 }
 
 float getNormalizedValues(float results[]) {
@@ -140,16 +147,6 @@ float getNormalizedValues(float results[]) {
 // altering weighting scheme works for arch back down the track too
 // car works fine for the esses as well
 float calculate1514128Error(float normalized_values[]) {  
-  // return (normalized_values[0] * -15 +
-  //           normalized_values[1] * -14 +
-  //           normalized_values[2] * -12 +
-  //           normalized_values[3] * -8 +
-  //           normalized_values[4] * 8 +
-  //           normalized_values[5] * 12 +
-  //           normalized_values[6] * 14 +
-  //           normalized_values[7] * 15
-  //       / 8);
-
     if (currentDirection == 0) {
         return (
             normalized_values[0] * -15 +
@@ -173,6 +170,18 @@ float calculate1514128Error(float normalized_values[]) {
     normalized_values[6] * 14 +
     normalized_values[7] * 15 
   ) / 8;
+}
+
+float calculateRegularError(float normalized_values[]) {
+    return (normalized_values[0] * -15 +
+            normalized_values[1] * -14 +
+            normalized_values[2] * -12 +
+            normalized_values[3] * -8 +
+            normalized_values[4] * 8 +
+            normalized_values[5] * 12 +
+            normalized_values[6] * 14 +
+            normalized_values[7] * 15
+        / 8);
 }
 
 // when veering off to the left, this becomes positive
